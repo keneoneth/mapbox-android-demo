@@ -48,6 +48,7 @@ public class TilequeryActivity extends AppCompatActivity implements
   private static final String TAG = "TilequeryActivity";
   private static final String GEOJSON_SOURCE_ID = "GEOJSON_SOURCE_ID";
   private static final String TILESET_ID = "mapbox.mapbox-streets-v7";
+  private static final String LAYER_ID = "LAYER_ID";
   private static final int TILEQUERY_RADIUS = 100;
   private static final int TILEQUERY_LIMIT = 10;
   private static int index;
@@ -85,30 +86,20 @@ public class TilequeryActivity extends AppCompatActivity implements
   @Override
   public void onMapReady(MapboxMap mapboxMap) {
     TilequeryActivity.this.mapboxMap = mapboxMap;
+    mapboxMap.addImage("RESULT-ICON-ID", BitmapUtils.getBitmapFromDrawable(
+      getResources().getDrawable(R.drawable.blue_marker)));
     displayDeviceLocation();
-    initResultSource();
-    initResultSymbolLayer();
-    makeTilequeryApiCall(new LatLng(mapboxMap.getLocationComponent().getLastKnownLocation().getLatitude(),
-      mapboxMap.getLocationComponent().getLastKnownLocation().getLongitude()));
+    /*makeTilequeryApiCall(new LatLng(mapboxMap.getLocationComponent().getLastKnownLocation().getLatitude(),
+      mapboxMap.getLocationComponent().getLastKnownLocation().getLongitude()));*/
     mapboxMap.addOnMapClickListener(this);
   }
-
-  /**
-   * Add a GeoJson source to the map for the SymbolLayer icons to represent the Tilequery response locations
-   */
-  private void initResultSource() {
-    GeoJsonSource resultGeoJsonSource = new GeoJsonSource(GEOJSON_SOURCE_ID,
-      FeatureCollection.fromFeatures(new Feature[] {}));
-    mapboxMap.addSource(resultGeoJsonSource);
-  }
-
+  
   /**
    * Add a SymbolLayer for icons that will represent the Tilequery API response locations
    */
-  private void initResultSymbolLayer() {
-    mapboxMap.addImage("RESULT-ICON-ID", BitmapUtils.getBitmapFromDrawable(
-      getResources().getDrawable(R.drawable.blue_marker)));
-    SymbolLayer resultSymbolLayer = new SymbolLayer("LAYER_ID", GEOJSON_SOURCE_ID);
+  private void addResultSymbolLayer() {
+    Log.d(TAG, "addResultSymbolLayer: ");
+    SymbolLayer resultSymbolLayer = new SymbolLayer(LAYER_ID, GEOJSON_SOURCE_ID);
     resultSymbolLayer.withProperties(
       iconImage("RESULT-ICON-ID"),
       iconSize(8f),
@@ -167,13 +158,33 @@ public class TilequeryActivity extends AppCompatActivity implements
 
     Log.d(TAG, "makeTilequeryApiCall: requestUrl = " + requestUrl);
 
-    try {
 
+    try {
+      if (mapboxMap.getSource(GEOJSON_SOURCE_ID) != null) {
+        Log.d(TAG, "makeTilequeryApiCall: mapboxMap.getSource(GEOJSON_SOURCE_ID) != null");
+        mapboxMap.removeSource(GEOJSON_SOURCE_ID);
+      }
+
+      Log.d(TAG, "makeTilequeryApiCall: here 1");
       // Retrieve GeoJSON information from the Mapbox Tilequery API
       resultBlueMarkerGeoJsonSource = new GeoJsonSource(
         GEOJSON_SOURCE_ID, new URL(requestUrl));
+
+      Log.d(TAG, "makeTilequeryApiCall: here 2");
+
       // Add the GeoJsonSource to map
       mapboxMap.addSource(resultBlueMarkerGeoJsonSource);
+
+      Log.d(TAG, "makeTilequeryApiCall: here 3");
+
+      if (mapboxMap.getLayer(LAYER_ID) != null) {
+        Log.d(TAG, "makeTilequeryApiCall: here 4");
+
+        Log.d(TAG, "makeTilequeryApiCall: mapboxMap.getLayer(LAYER_ID) != null");
+        mapboxMap.removeLayer(LAYER_ID);
+      }
+
+      addResultSymbolLayer();
 
     } catch (Throwable throwable) {
       Log.e(TAG, "Couldn't add GeoJsonSource to map", throwable);
