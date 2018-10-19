@@ -1,6 +1,8 @@
 package com.mapbox.mapboxandroiddemo.examples.javaservices;
 
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v4.content.ContextCompat;
@@ -14,6 +16,7 @@ import com.mapbox.android.core.permissions.PermissionsManager;
 import com.mapbox.geojson.Feature;
 import com.mapbox.geojson.FeatureCollection;
 import com.mapbox.mapboxandroiddemo.R;
+import com.mapbox.mapboxandroiddemo.examples.styles.BasicSymbolLayerActivity;
 import com.mapbox.mapboxsdk.Mapbox;
 import com.mapbox.mapboxsdk.geometry.LatLng;
 import com.mapbox.mapboxsdk.location.LocationComponent;
@@ -86,8 +89,12 @@ public class TilequeryActivity extends AppCompatActivity implements
   @Override
   public void onMapReady(MapboxMap mapboxMap) {
     TilequeryActivity.this.mapboxMap = mapboxMap;
-    mapboxMap.addImage("RESULT-ICON-ID", BitmapUtils.getBitmapFromDrawable(
-      getResources().getDrawable(R.drawable.blue_marker)));
+
+    // Add the marker image to map
+    Bitmap icon = BitmapFactory.decodeResource(
+      TilequeryActivity.this.getResources(), R.drawable.blue_marker);
+    mapboxMap.addImage("RESULT-ICON-ID", icon);
+
     displayDeviceLocation();
     /*makeTilequeryApiCall(new LatLng(mapboxMap.getLocationComponent().getLastKnownLocation().getLatitude(),
       mapboxMap.getLocationComponent().getLastKnownLocation().getLongitude()));*/
@@ -100,14 +107,13 @@ public class TilequeryActivity extends AppCompatActivity implements
   private void addResultSymbolLayer() {
     Log.d(TAG, "addResultSymbolLayer: ");
     SymbolLayer resultSymbolLayer = new SymbolLayer(LAYER_ID, GEOJSON_SOURCE_ID);
-    resultSymbolLayer.withProperties(
+    resultSymbolLayer.setProperties(
       iconImage("RESULT-ICON-ID"),
-      iconSize(8f),
+      iconSize(14f),
       iconIgnorePlacement(true),
-      iconAllowOverlap(true),
-      iconTranslate(new Float[] {0f, 8f})
+      iconAllowOverlap(true)
     );
-    resultSymbolLayer.setFilter(eq(literal("$type"), literal("Point")));
+    /*resultSymbolLayer.setFilter(eq(literal("$type"), literal("Point")));*/
     mapboxMap.addLayer(resultSymbolLayer);
   }
 
@@ -170,7 +176,13 @@ public class TilequeryActivity extends AppCompatActivity implements
       resultBlueMarkerGeoJsonSource = new GeoJsonSource(
         GEOJSON_SOURCE_ID, new URL(requestUrl));
 
-      Log.d(TAG, "makeTilequeryApiCall: here 2");
+      resultBlueMarkerGeoJsonSource.querySourceFeatures(eq(literal("$type"), literal("Point")));
+
+      for (Feature singleFeature : resultBlueMarkerGeoJsonSource.querySourceFeatures(eq(literal("$type"), literal("Point")))) {
+        Log.d(TAG, "makeTilequeryApiCall: singleFeature = " + singleFeature);
+      }
+
+      /*Log.d(TAG, "makeTilequeryApiCall: here 2");
 
       // Add the GeoJsonSource to map
       mapboxMap.addSource(resultBlueMarkerGeoJsonSource);
@@ -184,7 +196,7 @@ public class TilequeryActivity extends AppCompatActivity implements
         mapboxMap.removeLayer(LAYER_ID);
       }
 
-      addResultSymbolLayer();
+      addResultSymbolLayer();*/
 
     } catch (Throwable throwable) {
       Log.e(TAG, "Couldn't add GeoJsonSource to map", throwable);
