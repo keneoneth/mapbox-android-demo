@@ -5,7 +5,6 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
-import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.widget.TextView;
@@ -16,11 +15,9 @@ import com.mapbox.android.core.permissions.PermissionsManager;
 import com.mapbox.geojson.Feature;
 import com.mapbox.geojson.FeatureCollection;
 import com.mapbox.mapboxandroiddemo.R;
-import com.mapbox.mapboxandroiddemo.examples.styles.BasicSymbolLayerActivity;
 import com.mapbox.mapboxsdk.Mapbox;
 import com.mapbox.mapboxsdk.geometry.LatLng;
 import com.mapbox.mapboxsdk.location.LocationComponent;
-import com.mapbox.mapboxsdk.location.LocationComponentOptions;
 import com.mapbox.mapboxsdk.location.modes.CameraMode;
 import com.mapbox.mapboxsdk.location.modes.RenderMode;
 import com.mapbox.mapboxsdk.maps.MapView;
@@ -28,18 +25,16 @@ import com.mapbox.mapboxsdk.maps.MapboxMap;
 import com.mapbox.mapboxsdk.maps.OnMapReadyCallback;
 import com.mapbox.mapboxsdk.style.layers.SymbolLayer;
 import com.mapbox.mapboxsdk.style.sources.GeoJsonSource;
-import com.mapbox.mapboxsdk.utils.BitmapUtils;
 
 import java.net.URL;
 import java.util.List;
 
-import static com.mapbox.mapboxsdk.style.expressions.Expression.eq;
-import static com.mapbox.mapboxsdk.style.expressions.Expression.literal;
+import okhttp3.HttpUrl;
+
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconAllowOverlap;
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconIgnorePlacement;
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconImage;
-import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconSize;
-import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconTranslate;
+import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconOffset;
 
 /**
  * Use the Mapbox Tilequery API to retrieve information about Features on a Vector Tileset. More info about
@@ -49,7 +44,7 @@ public class TilequeryActivity extends AppCompatActivity implements
   OnMapReadyCallback, PermissionsListener, MapboxMap.OnMapClickListener {
 
   private static final String TAG = "TilequeryActivity";
-  private static final String GEOJSON_SOURCE_ID = "GEOJSON_SOURCE_ID";
+  private static final String RESULT_GEOJSON_SOURCE_ID = "RESULT_GEOJSON_SOURCE_ID";
   private static final String TILESET_ID = "mapbox.mapbox-streets-v7";
   private static final String LAYER_ID = "LAYER_ID";
   private static final int TILEQUERY_RADIUS = 100;
@@ -61,15 +56,15 @@ public class TilequeryActivity extends AppCompatActivity implements
   private MapView mapView;
   private TextView tilequeryResponseTextView;
   private GeoJsonSource resultBlueMarkerGeoJsonSource;
-  private String requestUrl;
-
+  private HttpUrl requestUrl;
+  private SymbolLayer clickSymbolLayer;
+  private SymbolLayer resultSymbolLayer;
   @Override
 
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
 
     index = 0;
-
 
     // Mapbox access token is configured here. This needs to be called either in your application
     // object or in the same activity which contains the mapview.
@@ -90,35 +85,56 @@ public class TilequeryActivity extends AppCompatActivity implements
   public void onMapReady(MapboxMap mapboxMap) {
     TilequeryActivity.this.mapboxMap = mapboxMap;
 
-    // Add the marker image to map
-    Bitmap icon = BitmapFactory.decodeResource(
-      TilequeryActivity.this.getResources(), R.drawable.blue_marker);
-    mapboxMap.addImage("RESULT-ICON-ID", icon);
+
+    addClickLayer();
+    addResultLayer();
 
     displayDeviceLocation();
-    /*makeTilequeryApiCall(new LatLng(mapboxMap.getLocationComponent().getLastKnownLocation().getLatitude(),
-      mapboxMap.getLocationComponent().getLastKnownLocation().getLongitude()));*/
+
     mapboxMap.addOnMapClickListener(this);
   }
-  
-  /**
-   * Add a SymbolLayer for icons that will represent the Tilequery API response locations
-   */
-  private void addResultSymbolLayer() {
-    Log.d(TAG, "addResultSymbolLayer: ");
-    SymbolLayer resultSymbolLayer = new SymbolLayer(LAYER_ID, GEOJSON_SOURCE_ID);
-    resultSymbolLayer.setProperties(
-      iconImage("RESULT-ICON-ID"),
-      iconSize(14f),
+
+  private void addClickLayer() {
+    Bitmap clickSymbolIcon = BitmapFactory.decodeResource(
+      TilequeryActivity.this.getResources(), R.drawable.red_marker);
+    mapboxMap.addImage("CLICK-ICON-ID", clickSymbolIcon);
+
+    GeoJsonSource clickGeoJsonSource = new GeoJsonSource("click-source", FeatureCollection.fromFeatures(new Feature[]{}));
+    mapboxMap.addSource(clickGeoJsonSource);
+
+    clickSymbolLayer = new SymbolLayer("click-layer", "click-source");
+    clickSymbolLayer.setProperties(
+      iconImage("CLICK-ICON-ID"),
+      iconOffset(new Float[]{0f,-12f}),
       iconIgnorePlacement(true),
       iconAllowOverlap(true)
     );
-    /*resultSymbolLayer.setFilter(eq(literal("$type"), literal("Point")));*/
+    mapboxMap.addLayer(clickSymbolLayer);
+  }
+
+  private void addResultLayer() {
+
+    // Add the marker image to map
+    Bitmap resultSymbolIcon = BitmapFactory.decodeResource(
+      TilequeryActivity.this.getResources(), R.drawable.blue_marker);
+    mapboxMap.addImage("RESULT-ICON-ID", resultSymbolIcon);
+
+    resultSymbolLayer = new SymbolLayer(LAYER_ID, RESULT_GEOJSON_SOURCE_ID);
+    resultSymbolLayer.setProperties(
+      iconImage("RESULT-ICON-ID"),
+      iconOffset(new Float[]{0f,-12f}),
+      iconIgnorePlacement(true),
+      iconAllowOverlap(true)
+    );
     mapboxMap.addLayer(resultSymbolLayer);
   }
 
   @Override
   public void onMapClick(@NonNull LatLng point) {
+    /*GeoJsonSource source = mapboxMap.getSourceAs("click-source");
+    if (source != null) {
+      source.setGeoJson(Feature.fromGeometry(Point.fromLngLat(point.getLongitude(), point.getLatitude())));
+    }*/
     makeTilequeryApiCall(point);
   }
 
@@ -153,53 +169,61 @@ public class TilequeryActivity extends AppCompatActivity implements
 
     // Build a request URL to get information from the Mapbox Tilequery API. Notice that the geometry parameter
     // is set to return Point geometries.
-    requestUrl = "https://api.mapbox.com/v4/"
-      + TILESET_ID
-      + "/tilequery/"
-      + point.getLongitude() + ","
-      + point.getLatitude()
-      + ".json?radius=" + String.valueOf(TILEQUERY_RADIUS)
-      + "&limit=" + String.valueOf(TILEQUERY_LIMIT)
-      + "&geometry=point&access_token=" + getString(R.string.access_token);
+     requestUrl = new HttpUrl.Builder()
+      .scheme("https")
+      .host("api.mapbox.com")
+      .addPathSegment("v4")
+      .addPathSegment(TILESET_ID)
+      .addPathSegment("tilequery")
+      .addPathSegment(String.valueOf(point.getLongitude())+
+        ","+String.valueOf(point.getLatitude())+".json")
+      .addQueryParameter("radius", String.valueOf(TILEQUERY_RADIUS))
+      .addQueryParameter("limit", String.valueOf(TILEQUERY_LIMIT))
+      .addQueryParameter("geometry", String.valueOf("point"))
+      .addQueryParameter("access_token", getString(R.string.access_token))
+      .build();
 
     Log.d(TAG, "makeTilequeryApiCall: requestUrl = " + requestUrl);
 
-
     try {
-      if (mapboxMap.getSource(GEOJSON_SOURCE_ID) != null) {
-        Log.d(TAG, "makeTilequeryApiCall: mapboxMap.getSource(GEOJSON_SOURCE_ID) != null");
-        mapboxMap.removeSource(GEOJSON_SOURCE_ID);
-      }
 
-      Log.d(TAG, "makeTilequeryApiCall: here 1");
+      String randomNum = String.valueOf(Math.random());
+
       // Retrieve GeoJSON information from the Mapbox Tilequery API
-      resultBlueMarkerGeoJsonSource = new GeoJsonSource(
-        GEOJSON_SOURCE_ID, new URL(requestUrl));
-
-      resultBlueMarkerGeoJsonSource.querySourceFeatures(eq(literal("$type"), literal("Point")));
-
-      for (Feature singleFeature : resultBlueMarkerGeoJsonSource.querySourceFeatures(eq(literal("$type"), literal("Point")))) {
-        Log.d(TAG, "makeTilequeryApiCall: singleFeature = " + singleFeature);
-      }
-
-      /*Log.d(TAG, "makeTilequeryApiCall: here 2");
-
-      // Add the GeoJsonSource to map
+      resultBlueMarkerGeoJsonSource = new GeoJsonSource(RESULT_GEOJSON_SOURCE_ID, new URL(requestUrl.toString()));
       mapboxMap.addSource(resultBlueMarkerGeoJsonSource);
+      Log.d(TAG, "makeTilequeryApiCall: result geojsonsource added");
 
-      Log.d(TAG, "makeTilequeryApiCall: here 3");
 
-      if (mapboxMap.getLayer(LAYER_ID) != null) {
-        Log.d(TAG, "makeTilequeryApiCall: here 4");
-
-        Log.d(TAG, "makeTilequeryApiCall: mapboxMap.getLayer(LAYER_ID) != null");
-        mapboxMap.removeLayer(LAYER_ID);
-      }
-
-      addResultSymbolLayer();*/
 
     } catch (Throwable throwable) {
       Log.e(TAG, "Couldn't add GeoJsonSource to map", throwable);
+    }
+  }
+
+  /**
+   * Use the Maps SDK's LocationComponent to display the device location on the map
+   */
+  @SuppressWarnings( {"MissingPermission"})
+  private void displayDeviceLocation() {
+    // Check if permissions are enabled and if not request
+    if (PermissionsManager.areLocationPermissionsGranted(this)) {
+
+      // Get an instance of the component
+      LocationComponent locationComponent = mapboxMap.getLocationComponent();
+
+      // Activate with options
+      locationComponent.activateLocationComponent(this);
+
+      // Enable to make component visible
+      locationComponent.setLocationComponentEnabled(true);
+
+      // Set the component's camera mode
+      locationComponent.setCameraMode(CameraMode.TRACKING);
+      locationComponent.setRenderMode(RenderMode.COMPASS);
+    } else {
+      permissionsManager = new PermissionsManager(this);
+      permissionsManager.requestLocationPermissions(this);
     }
   }
 
@@ -264,36 +288,5 @@ public class TilequeryActivity extends AppCompatActivity implements
   protected void onSaveInstanceState(Bundle outState) {
     super.onSaveInstanceState(outState);
     mapView.onSaveInstanceState(outState);
-  }
-
-  /**
-   * Use the Maps SDK's LocationComponent to display the device location on the map
-   */
-  @SuppressWarnings( {"MissingPermission"})
-  private void displayDeviceLocation() {
-    // Check if permissions are enabled and if not request
-    if (PermissionsManager.areLocationPermissionsGranted(this)) {
-
-      LocationComponentOptions options = LocationComponentOptions.builder(this)
-        .trackingGesturesManagement(true)
-        .accuracyColor(ContextCompat.getColor(this, R.color.mapboxGreen))
-        .build();
-
-      // Get an instance of the component
-      LocationComponent locationComponent = mapboxMap.getLocationComponent();
-
-      // Activate with options
-      locationComponent.activateLocationComponent(this, options);
-
-      // Enable to make component visible
-      locationComponent.setLocationComponentEnabled(true);
-
-      // Set the component's camera mode
-      locationComponent.setCameraMode(CameraMode.TRACKING);
-      locationComponent.setRenderMode(RenderMode.COMPASS);
-    } else {
-      permissionsManager = new PermissionsManager(this);
-      permissionsManager.requestLocationPermissions(this);
-    }
   }
 }
