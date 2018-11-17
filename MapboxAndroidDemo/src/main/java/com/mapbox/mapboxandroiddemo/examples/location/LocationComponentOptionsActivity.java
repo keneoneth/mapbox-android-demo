@@ -130,7 +130,8 @@ public class LocationComponentOptionsActivity extends AppCompatActivity implemen
     if (locationComponent.getLastKnownLocation() != null) {
       Toast.makeText(this, String.format(getString(R.string.current_location),
         locationComponent.getLastKnownLocation().getLatitude(),
-        locationComponent.getLastKnownLocation().getLongitude(), "\ud83d\ude01"), Toast.LENGTH_LONG).show();
+        locationComponent.getLastKnownLocation().getLongitude()), Toast.LENGTH_LONG).show();
+      
     }
   }
 
