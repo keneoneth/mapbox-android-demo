@@ -12,8 +12,10 @@ import android.widget.Toast;
 
 import com.mapbox.android.core.permissions.PermissionsListener;
 import com.mapbox.android.core.permissions.PermissionsManager;
+import com.mapbox.api.tilequery.MapboxTilequery;
 import com.mapbox.geojson.Feature;
 import com.mapbox.geojson.FeatureCollection;
+import com.mapbox.geojson.Point;
 import com.mapbox.mapboxandroiddemo.R;
 import com.mapbox.mapboxsdk.Mapbox;
 import com.mapbox.mapboxsdk.geometry.LatLng;
@@ -30,6 +32,10 @@ import java.net.URL;
 import java.util.List;
 
 import okhttp3.HttpUrl;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import timber.log.Timber;
 
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconAllowOverlap;
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconIgnorePlacement;
@@ -41,7 +47,7 @@ import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconOffset;
  * the Tilequery API can be found at https://www.mapbox.com/api-documentation/#tilequery
  */
 public class TilequeryActivity extends AppCompatActivity implements
-  OnMapReadyCallback, PermissionsListener, MapboxMap.OnMapClickListener {
+    OnMapReadyCallback, PermissionsListener, MapboxMap.OnMapClickListener {
 
   private static final String TAG = "TilequeryActivity";
   private static final String RESULT_GEOJSON_SOURCE_ID = "RESULT_GEOJSON_SOURCE_ID";
@@ -59,6 +65,7 @@ public class TilequeryActivity extends AppCompatActivity implements
   private HttpUrl requestUrl;
   private SymbolLayer clickSymbolLayer;
   private SymbolLayer resultSymbolLayer;
+
   @Override
 
   protected void onCreate(Bundle savedInstanceState) {
@@ -80,7 +87,7 @@ public class TilequeryActivity extends AppCompatActivity implements
     mapView.getMapAsync(this);
   }
 
-  @SuppressWarnings( {"MissingPermission"})
+  @SuppressWarnings({"MissingPermission"})
   @Override
   public void onMapReady(MapboxMap mapboxMap) {
     TilequeryActivity.this.mapboxMap = mapboxMap;
@@ -96,7 +103,7 @@ public class TilequeryActivity extends AppCompatActivity implements
 
   private void addClickLayer() {
     Bitmap clickSymbolIcon = BitmapFactory.decodeResource(
-      TilequeryActivity.this.getResources(), R.drawable.red_marker);
+        TilequeryActivity.this.getResources(), R.drawable.red_marker);
     mapboxMap.addImage("CLICK-ICON-ID", clickSymbolIcon);
 
     GeoJsonSource clickGeoJsonSource = new GeoJsonSource("click-source", FeatureCollection.fromFeatures(new Feature[]{}));
@@ -104,10 +111,10 @@ public class TilequeryActivity extends AppCompatActivity implements
 
     clickSymbolLayer = new SymbolLayer("click-layer", "click-source");
     clickSymbolLayer.setProperties(
-      iconImage("CLICK-ICON-ID"),
-      iconOffset(new Float[]{0f,-12f}),
-      iconIgnorePlacement(true),
-      iconAllowOverlap(true)
+        iconImage("CLICK-ICON-ID"),
+        iconOffset(new Float[]{0f, -12f}),
+        iconIgnorePlacement(true),
+        iconAllowOverlap(true)
     );
     mapboxMap.addLayer(clickSymbolLayer);
   }
@@ -116,15 +123,15 @@ public class TilequeryActivity extends AppCompatActivity implements
 
     // Add the marker image to map
     Bitmap resultSymbolIcon = BitmapFactory.decodeResource(
-      TilequeryActivity.this.getResources(), R.drawable.blue_marker);
+        TilequeryActivity.this.getResources(), R.drawable.blue_marker);
     mapboxMap.addImage("RESULT-ICON-ID", resultSymbolIcon);
 
     resultSymbolLayer = new SymbolLayer(LAYER_ID, RESULT_GEOJSON_SOURCE_ID);
     resultSymbolLayer.setProperties(
-      iconImage("RESULT-ICON-ID"),
-      iconOffset(new Float[]{0f,-12f}),
-      iconIgnorePlacement(true),
-      iconAllowOverlap(true)
+        iconImage("RESULT-ICON-ID"),
+        iconOffset(new Float[]{0f, -12f}),
+        iconIgnorePlacement(true),
+        iconAllowOverlap(true)
     );
     mapboxMap.addLayer(resultSymbolLayer);
   }
@@ -144,67 +151,38 @@ public class TilequeryActivity extends AppCompatActivity implements
    * @param point
    */
   private void makeTilequeryApiCall(@NonNull LatLng point) {
-    /*MapboxTilequery tilequery = MapboxTilequery.builder()
-      .accessToken(getString(R.string.access_token))
-      .mapIds("mapbox.mapbox-streets-v7")
-      .query(point)
-      .radius(1000)
-      .limit(30)
-      .geometry("point")
-      .dedupe(true)
-      .layers("poi-label,admin-state-province,building,poi-label,country-label")
-      .build();
+    MapboxTilequery tilequery = MapboxTilequery.builder()
+        .accessToken(getString(R.string.access_token))
+        .mapIds("mapbox.mapbox-streets-v7")
+        .query(Point.fromLngLat(point.getLongitude(), point.getLatitude()))
+        .radius(1000)
+        .limit(30)
+        .geometry("point")
+        .dedupe(true)
+        .layers("poi-label,admin-state-province,building,poi-label,country-label")
+        .build();
 
     tilequery.enqueueCall(new Callback<FeatureCollection>() {
       @Override
       public void onResponse(Call<FeatureCollection> call, Response<FeatureCollection> response) {
         tilequeryResponseTextView.setText(response.body().toJson());
+        GeoJsonSource source = mapboxMap.getSourceAs(RESULT_GEOJSON_SOURCE_ID);
+        if (source != null && response.body().features() != null) {
+          source.setGeoJson(FeatureCollection.fromFeatures(response.body().features()));
+        }
       }
 
       @Override
       public void onFailure(Call<FeatureCollection> call, Throwable t) {
         Timber.d("Request failed: " + t.getMessage());
       }
-    });*/
-
-    // Build a request URL to get information from the Mapbox Tilequery API. Notice that the geometry parameter
-    // is set to return Point geometries.
-     requestUrl = new HttpUrl.Builder()
-      .scheme("https")
-      .host("api.mapbox.com")
-      .addPathSegment("v4")
-      .addPathSegment(TILESET_ID)
-      .addPathSegment("tilequery")
-      .addPathSegment(String.valueOf(point.getLongitude())+
-        ","+String.valueOf(point.getLatitude())+".json")
-      .addQueryParameter("radius", String.valueOf(TILEQUERY_RADIUS))
-      .addQueryParameter("limit", String.valueOf(TILEQUERY_LIMIT))
-      .addQueryParameter("geometry", String.valueOf("point"))
-      .addQueryParameter("access_token", getString(R.string.access_token))
-      .build();
-
-    Log.d(TAG, "makeTilequeryApiCall: requestUrl = " + requestUrl);
-
-    try {
-
-      String randomNum = String.valueOf(Math.random());
-
-      // Retrieve GeoJSON information from the Mapbox Tilequery API
-      resultBlueMarkerGeoJsonSource = new GeoJsonSource(RESULT_GEOJSON_SOURCE_ID, new URL(requestUrl.toString()));
-      mapboxMap.addSource(resultBlueMarkerGeoJsonSource);
-      Log.d(TAG, "makeTilequeryApiCall: result geojsonsource added");
-
-
-
-    } catch (Throwable throwable) {
-      Log.e(TAG, "Couldn't add GeoJsonSource to map", throwable);
-    }
+    });
   }
 
   /**
    * Use the Maps SDK's LocationComponent to display the device location on the map
    */
-  @SuppressWarnings( {"MissingPermission"})
+  @SuppressWarnings({"MissingPermission"})
   private void displayDeviceLocation() {
     // Check if permissions are enabled and if not request
     if (PermissionsManager.areLocationPermissionsGranted(this)) {

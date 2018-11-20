@@ -122,6 +122,7 @@ dependencies {
     chinaImplementation dependenciesList.mapboxChinaPlugin
     globalImplementation dependenciesList.mapboxMapSdk
     implementation dependenciesList.mapboxTurf
+    implementation dependenciesList.mapboxServices
 
     // Mapbox plugins
     implementation dependenciesList.mapboxPluginBuilding
