@@ -3,6 +3,7 @@ package com.mapbox.mapboxandroiddemo.examples.javaservices;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
@@ -25,6 +26,7 @@ import com.mapbox.mapboxsdk.location.modes.RenderMode;
 import com.mapbox.mapboxsdk.maps.MapView;
 import com.mapbox.mapboxsdk.maps.MapboxMap;
 import com.mapbox.mapboxsdk.maps.OnMapReadyCallback;
+import com.mapbox.mapboxsdk.style.layers.CircleLayer;
 import com.mapbox.mapboxsdk.style.layers.SymbolLayer;
 import com.mapbox.mapboxsdk.style.sources.GeoJsonSource;
 
@@ -37,6 +39,9 @@ import retrofit2.Callback;
 import retrofit2.Response;
 import timber.log.Timber;
 
+import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.circleColor;
+import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.circleOpacity;
+import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.circleRadius;
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconAllowOverlap;
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconIgnorePlacement;
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconImage;
@@ -51,18 +56,14 @@ public class TilequeryActivity extends AppCompatActivity implements
 
   private static final String TAG = "TilequeryActivity";
   private static final String RESULT_GEOJSON_SOURCE_ID = "RESULT_GEOJSON_SOURCE_ID";
-  private static final String TILESET_ID = "mapbox.mapbox-streets-v7";
   private static final String LAYER_ID = "LAYER_ID";
-  private static final int TILEQUERY_RADIUS = 100;
-  private static final int TILEQUERY_LIMIT = 10;
   private static int index;
-
+  private static int QUERY_RADIUS_METERS = 50;
   private PermissionsManager permissionsManager;
   private MapboxMap mapboxMap;
   private MapView mapView;
   private TextView tilequeryResponseTextView;
   private GeoJsonSource resultBlueMarkerGeoJsonSource;
-  private HttpUrl requestUrl;
   private SymbolLayer clickSymbolLayer;
   private SymbolLayer resultSymbolLayer;
 
@@ -95,6 +96,7 @@ public class TilequeryActivity extends AppCompatActivity implements
 
     addClickLayer();
     addResultLayer();
+    addQueryRadiusCircleLayer();
 
     displayDeviceLocation();
 
@@ -119,12 +121,30 @@ public class TilequeryActivity extends AppCompatActivity implements
     mapboxMap.addLayer(clickSymbolLayer);
   }
 
+  private void addQueryRadiusCircleLayer() {
+    GeoJsonSource circleSource = new GeoJsonSource("circle-source",
+        FeatureCollection.fromFeatures(new Feature[]{}));
+    mapboxMap.addSource(circleSource);
+    CircleLayer circleRadiusLayer = new CircleLayer("circle-layer", "circle-source");
+    circleRadiusLayer.setProperties(
+        circleRadius(Float.valueOf(QUERY_RADIUS_METERS)),
+        circleColor(Color.MAGENTA),
+        circleOpacity(.3f)
+    );
+    mapboxMap.addLayer(circleRadiusLayer);
+  }
+
   private void addResultLayer() {
 
     // Add the marker image to map
     Bitmap resultSymbolIcon = BitmapFactory.decodeResource(
         TilequeryActivity.this.getResources(), R.drawable.blue_marker);
     mapboxMap.addImage("RESULT-ICON-ID", resultSymbolIcon);
+
+    // Retrieve GeoJSON information from the Mapbox Tilequery API
+    resultBlueMarkerGeoJsonSource = new GeoJsonSource(RESULT_GEOJSON_SOURCE_ID,
+        FeatureCollection.fromFeatures(new Feature[]{}));
+    mapboxMap.addSource(resultBlueMarkerGeoJsonSource);
 
     resultSymbolLayer = new SymbolLayer(LAYER_ID, RESULT_GEOJSON_SOURCE_ID);
     resultSymbolLayer.setProperties(
@@ -138,10 +158,6 @@ public class TilequeryActivity extends AppCompatActivity implements
 
   @Override
   public void onMapClick(@NonNull LatLng point) {
-    /*GeoJsonSource source = mapboxMap.getSourceAs("click-source");
-    if (source != null) {
-      source.setGeoJson(Feature.fromGeometry(Point.fromLngLat(point.getLongitude(), point.getLatitude())));
-    }*/
     makeTilequeryApiCall(point);
   }
 
@@ -155,9 +171,9 @@ public class TilequeryActivity extends AppCompatActivity implements
         .accessToken(getString(R.string.access_token))
         .mapIds("mapbox.mapbox-streets-v7")
         .query(Point.fromLngLat(point.getLongitude(), point.getLatitude()))
-        .radius(1000)
-        .limit(30)
-        .geometry("point")
+        .radius(QUERY_RADIUS_METERS)
+        .limit(3)
+        .geometry("polygon")
         .dedupe(true)
         .layers("poi-label,admin-state-province,building,poi-label,country-label")
         .build();
@@ -169,6 +185,12 @@ public class TilequeryActivity extends AppCompatActivity implements
         GeoJsonSource source = mapboxMap.getSourceAs(RESULT_GEOJSON_SOURCE_ID);
         if (source != null && response.body().features() != null) {
           source.setGeoJson(FeatureCollection.fromFeatures(response.body().features()));
+        }
+
+        GeoJsonSource circleSource = mapboxMap.getSourceAs("circle-source");
+        if (circleSource != null) {
+          source.setGeoJson(Feature.fromGeometry(Point.fromLngLat(point.getLongitude(),
+              point.getLatitude())));
         }
       }
 
